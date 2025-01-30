@@ -1,24 +1,32 @@
-"use client"
+"use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react"
-import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import { User, Users, Briefcase, Phone, ChevronRight } from "lucide-react"
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { User, Users, Briefcase, Phone, ChevronRight } from "lucide-react";
+import "../styles/loader.css";
 
 interface TeamMember {
-  member_name: string
-  member_contact: string
+  member_name: string;
+  member_contact: string;
 }
 
 interface FormData {
-  team_name: string
-  leader_name: string
-  leader_contact: string
-  team_members: TeamMember[]
+  team_name: string;
+  leader_name: string;
+  leader_contact: string;
+  team_members: TeamMember[];
+}
+
+interface ValidationErrors {
+  team_name?: string;
+  leader_name?: string;
+  leader_contact?: string;
+  team_members: { member_name?: string; member_contact?: string }[];
 }
 
 export default function TeamRegistrationForm() {
-  const router = useRouter()
+  const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     team_name: "",
     leader_name: "",
@@ -28,47 +36,116 @@ export default function TeamRegistrationForm() {
       { member_name: "", member_contact: "" },
       { member_name: "", member_contact: "" },
     ],
-  })
+  });
+  const [errors, setErrors] = useState<ValidationErrors>({
+    team_members: [{}, {}, {}],
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validatePhoneNumber = (phone: string): string | undefined => {
+    if (!/^\+?[0-9]{10,14}$/.test(phone.replace(/[\s()-]/g, ""))) {
+      return "Please enter a valid phone number";
+    }
+    return undefined;
+  };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
-    }))
-  }
+    }));
 
-  const handleMemberChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    const updatedMembers = [...formData.team_members]
-    updatedMembers[index] = { ...updatedMembers[index], [name]: value }
+    let error: string | undefined;
+    if (name === "leader_contact") {
+      error = validatePhoneNumber(value);
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: error,
+    }));
+  };
+
+  const handleMemberChange = (
+    index: number,
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    const updatedMembers = [...formData.team_members];
+    updatedMembers[index] = { ...updatedMembers[index], [name]: value };
     setFormData((prev) => ({
       ...prev,
       team_members: updatedMembers,
-    }))
-  }
+    }));
+
+    let error: string | undefined;
+    if (name === "member_contact") {
+      error = validatePhoneNumber(value);
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      team_members: prev.team_members.map((member, i) =>
+        i === index ? { ...member, [name]: error } : member
+      ),
+    }));
+  };
 
   const submitForm = async (e: FormEvent) => {
-    e.preventDefault()
-    console.log(formData)
-    const response = await fetch("/api/register-team", {
-      method: "POST",
-      body: JSON.stringify(formData),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
+    e.preventDefault();
 
-    if (response.ok) {
-      router.push("/success")
-    } else {
-      alert("Failed to register team")
+    // Validate all fields before submission
+    const newErrors: ValidationErrors = {
+      leader_contact: validatePhoneNumber(formData.leader_contact),
+      team_members: formData.team_members.map((member) => ({
+        member_contact: validatePhoneNumber(member.member_contact),
+      })),
+    };
+
+    setErrors(newErrors);
+
+    // Check if there are any errors
+    if (
+      newErrors.leader_contact !== undefined ||
+      newErrors.team_members.some(
+        (member) => member.member_contact !== undefined
+      )
+    ) {
+      return; // Don't submit if there are errors
     }
-  }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/register-team", {
+        method: "POST",
+        body: JSON.stringify(formData),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        router.push("/success");
+      } else {
+        const errorData = await response.json();
+        alert(
+          `Failed to register team: ${errorData.message || "Unknown error"}`
+        );
+      }
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      alert("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const inputClasses =
-    "w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all duration-200 ease-in-out text-black placeholder-gray-400"
-  const labelClasses = "block text-gray-700 font-medium mb-1"
+    "w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all duration-200 ease-in-out text-black placeholder-gray-400";
+  const labelClasses = "block text-gray-700 font-medium mb-1";
+  const errorClasses = "text-red-500 text-sm mt-1";
 
   return (
     <motion.div
@@ -77,12 +154,21 @@ export default function TeamRegistrationForm() {
       transition={{ duration: 0.5 }}
       className="bg-white sm:p-8 p-4 sm:rounded-xl shadow-2xl w-full h-full sm:h-auto sm:max-w-2xl border border-gray-200 overflow-y-auto"
     >
+      {isLoading && (
+        <div className="flex justify-center items-center h-full w-screen z-10 backdrop-blur-md bg-black left-0 top-0 fixed">
+          <span className="loader absolute"></span>
+        </div>
+      )}
       <h2 className="text-3xl sm:text-4xl font-bold mb-6 text-center text-gray-800 bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600">
         Campus Carousel Registration
       </h2>
 
       <form onSubmit={submitForm} className="space-y-6">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+        >
           <label className={labelClasses}>
             <Briefcase className="inline-block mr-2 h-5 w-5 text-indigo-500" />
             Team Name
@@ -98,7 +184,11 @@ export default function TeamRegistrationForm() {
           />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+        >
           <label className={labelClasses}>
             <User className="inline-block mr-2 h-5 w-5 text-indigo-500" />
             Leader Name
@@ -114,7 +204,11 @@ export default function TeamRegistrationForm() {
           />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+        >
           <label className={labelClasses}>
             <Phone className="inline-block mr-2 h-5 w-5 text-indigo-500" />
             Leader Contact
@@ -128,6 +222,9 @@ export default function TeamRegistrationForm() {
             placeholder="Enter leader contact"
             required
           />
+          {errors.leader_contact && (
+            <p className={errorClasses}>{errors.leader_contact}</p>
+          )}
         </motion.div>
 
         {formData.team_members.map((member, index) => (
@@ -166,6 +263,11 @@ export default function TeamRegistrationForm() {
                   placeholder={`Enter member ${index + 1} contact`}
                   required
                 />
+                {errors.team_members[index]?.member_contact && (
+                  <p className={errorClasses}>
+                    {errors.team_members[index].member_contact}
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>
@@ -173,15 +275,24 @@ export default function TeamRegistrationForm() {
 
         <motion.button
           type="submit"
-          className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-3 rounded-lg font-semibold hover:shadow-lg hover:opacity-90 transition-all duration-200 ease-in-out flex items-center justify-center"
+          className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-3 rounded-lg font-semibold hover:shadow-lg hover:opacity-90 transition-all duration-200 ease-in-out flex items-center justify-center relative"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          disabled={isLoading}
         >
-          Submit Registration
-          <ChevronRight className="ml-2 h-5 w-5" />
+          {isLoading ? (
+            <>
+              <span className="loader absolute"></span>
+              <span className="opacity-0">Submit Registration</span>
+            </>
+          ) : (
+            <>
+              Submit Registration
+              <ChevronRight className="ml-2 h-5 w-5" />
+            </>
+          )}
         </motion.button>
       </form>
     </motion.div>
-  )
+  );
 }
-
