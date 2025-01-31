@@ -31,8 +31,6 @@ export async function POST(req: Request) {
         team_members[0].member_contact,
         team_members[1].member_name,
         team_members[1].member_contact,
-        team_members[2].member_name,
-        team_members[2].member_contact,
         new Date().toISOString(),
       ],
     ]

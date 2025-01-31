@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { User, Users, Briefcase, Phone, ChevronRight } from "lucide-react";
 import "../styles/loader.css";
+import { useRegister } from "@/contexts/RegisterContext";
 
 interface TeamMember {
   member_name: string;
@@ -27,6 +28,38 @@ interface ValidationErrors {
 
 export default function TeamRegistrationForm() {
   const router = useRouter();
+
+  const validateForm = () => {
+    const newErrors: ValidationErrors = {
+      team_name: formData.team_name ? undefined : "Please enter team name",
+      leader_name: formData.leader_name.split(" ").length >= 2
+        ? undefined
+        : "Enter Full Name",
+      leader_contact: validatePhoneNumber(formData.leader_contact),
+      team_members: formData.team_members.map((member) => ({
+        member_name: member.member_name.split(" ").length >= 2
+          ? undefined
+          : "Enter Full Name",
+        member_contact: validatePhoneNumber(member.member_contact),
+      })),
+    };
+    console.log(newErrors);
+    setErrors(newErrors);
+    if (
+      newErrors.team_name !== undefined ||
+      newErrors.leader_name !== undefined ||
+      newErrors.leader_contact !== undefined ||
+      newErrors.team_members.some(
+        (member) =>
+          member.member_name !== undefined ||
+          member.member_contact !== undefined
+      )
+    ) {
+      return false; // Don't submit if there are errors
+    }
+    return true;
+  };
+
   const [formData, setFormData] = useState<FormData>({
     team_name: "",
     leader_name: "",
@@ -34,16 +67,15 @@ export default function TeamRegistrationForm() {
     team_members: [
       { member_name: "", member_contact: "" },
       { member_name: "", member_contact: "" },
-      { member_name: "", member_contact: "" },
     ],
   });
   const [errors, setErrors] = useState<ValidationErrors>({
-    team_members: [{}, {}, {}],
+    team_members: [{}, {}],
   });
   const [isLoading, setIsLoading] = useState(false);
 
   const validatePhoneNumber = (phone: string): string | undefined => {
-    if (!/^\+?[0-9]{10,14}$/.test(phone.replace(/[\s()-]/g, ""))) {
+    if (!/^\+?[0-9]{10}$/.test(phone.replace(/[\s()-]/g, ""))) {
       return "Please enter a valid phone number";
     }
     return undefined;
@@ -91,30 +123,31 @@ export default function TeamRegistrationForm() {
       ),
     }));
   };
-
+  const register = useRegister()
   const submitForm = async (e: FormEvent) => {
     e.preventDefault();
 
-    // Validate all fields before submission
-    const newErrors: ValidationErrors = {
-      leader_contact: validatePhoneNumber(formData.leader_contact),
-      team_members: formData.team_members.map((member) => ({
-        member_contact: validatePhoneNumber(member.member_contact),
-      })),
-    };
-
-    setErrors(newErrors);
-
-    // Check if there are any errors
-    if (
-      newErrors.leader_contact !== undefined ||
-      newErrors.team_members.some(
-        (member) => member.member_contact !== undefined
-      )
-    ) {
-      return; // Don't submit if there are errors
+    if (!validateForm()) {
+      return;
     }
 
+    const memberMap = new Set();
+    const phoneMap = new Set();
+    memberMap.add(formData.leader_name);
+    phoneMap.add(formData.leader_contact);
+    for (let i = 0; i < formData.team_members.length; i++) {
+      if (memberMap.has(formData.team_members[i].member_name)) {
+        alert(`Member ${i + 1} has the same name as another member`);
+        return;
+      }
+      memberMap.add(formData.team_members[i].member_name);
+
+      if (phoneMap.has(formData.team_members[i].member_contact)) {
+        alert(`Member ${i + 1} has the same contact as another member`);
+        return;
+      }
+      phoneMap.add(formData.team_members[i].member_contact);
+    }
     setIsLoading(true);
 
     try {
@@ -127,6 +160,7 @@ export default function TeamRegistrationForm() {
       });
 
       if (response.ok) {
+        register.setIsRegistered(true);
         router.push("/success");
       } else {
         const errorData = await response.json();
@@ -202,6 +236,9 @@ export default function TeamRegistrationForm() {
             placeholder="Enter leader name"
             required
           />
+          {errors.leader_name && (
+            <p className={errorClasses}>{errors.leader_name}</p>
+          )}
         </motion.div>
 
         <motion.div
@@ -251,6 +288,11 @@ export default function TeamRegistrationForm() {
                   placeholder={`Enter member ${index + 1} name`}
                   required
                 />
+                {errors.team_members[index]?.member_name && (
+                  <p className={errorClasses}>
+                    {errors.team_members[index].member_name}
+                  </p>
+                )}
               </div>
               <div>
                 <label className={labelClasses}>Contact</label>
