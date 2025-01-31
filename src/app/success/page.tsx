@@ -12,7 +12,7 @@ export default function Page() {
       redirect("https://chat.whatsapp.com/KG3xsiEH0JlFVzDlDGVKLN");
     } else {
       alert(
-        "You Think We Idiots Nigga ? Go register your ass first then join the grp"
+        "You Think We Idiots ? Go register first then join the grp! 😂"
       );
     }
   };
